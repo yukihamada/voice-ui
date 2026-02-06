@@ -2,7 +2,11 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
+const WebSocket = require('ws');
+
+// Hot reload clients
+const reloadClients = new Set();
 
 const PORT = 8765;
 const OPENCLAW = '/Users/yuki/.nvm/versions/node/v22.22.0/bin/openclaw';
@@ -234,7 +238,78 @@ function callOpenClaw(message) {
   });
 }
 
+// WebSocket server for hot reload
+const wss = new WebSocket.Server({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  if (request.url === '/ws') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      reloadClients.add(ws);
+      ws.on('close', () => reloadClients.delete(ws));
+    });
+  }
+});
+
+// Watch files for changes
+const watchFiles = ['index.html', 'config.json'];
+let lastChange = Date.now();
+
+watchFiles.forEach(file => {
+  const filePath = path.join(__dirname, file);
+  if (fs.existsSync(filePath)) {
+    fs.watch(filePath, (eventType) => {
+      if (eventType === 'change' && Date.now() - lastChange > 1000) {
+        lastChange = Date.now();
+        console.log(`🔄 File changed: ${file}`);
+        
+        // Validate before reload
+        if (file === 'index.html') {
+          try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            if (!content.includes('<!DOCTYPE html>') || !content.includes('</html>')) {
+              throw new Error('Invalid HTML');
+            }
+            notifyReload();
+          } catch (e) {
+            console.log('❌ Invalid change detected, reverting...');
+            autoRevert();
+          }
+        } else {
+          notifyReload();
+        }
+      }
+    });
+  }
+});
+
+function notifyReload() {
+  console.log('📡 Notifying clients to reload...');
+  reloadClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ type: 'reload' }));
+    }
+  });
+}
+
+function autoRevert() {
+  try {
+    const { execSync } = require('child_process');
+    execSync('git checkout -- .', { cwd: __dirname });
+    console.log('🔄 Auto-reverted to last good state');
+    setTimeout(() => notifyReload(), 500);
+  } catch (e) {
+    console.error('Auto-revert failed:', e.message);
+  }
+}
+
+// Health check - auto revert if server crashes on restart
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught exception:', err.message);
+  autoRevert();
+});
+
 server.listen(PORT, () => {
   console.log(`🎤 Voice UI: http://localhost:${PORT}`);
   console.log(`🔗 Using OpenClaw agent: voice`);
+  console.log(`🔄 Hot reload: enabled`);
 });

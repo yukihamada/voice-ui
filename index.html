@@ -348,6 +348,23 @@
     let KEY = null;
     fetch('/api/key').then(r => r.json()).then(d => KEY = d.key).catch(() => {});
 
+    // Hot reload WebSocket
+    function connectHotReload() {
+      const ws = new WebSocket(`ws://${location.host}/ws`);
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'reload') {
+          console.log('🔄 Hot reload triggered');
+          location.reload();
+        }
+      };
+      ws.onclose = () => {
+        console.log('🔌 Hot reload disconnected, reconnecting...');
+        setTimeout(connectHotReload, 2000);
+      };
+    }
+    connectHotReload();
+
     let rec, chunks = [], recording = false, sound = true, history = [];
     let isProcessing = false;
     let isStopped = false;

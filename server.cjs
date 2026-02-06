@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 
 const PORT = 8765;
 const OPENCLAW = '/Users/yuki/.nvm/versions/node/v22.22.0/bin/openclaw';
+const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -34,6 +35,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404);
       res.end('Not found');
     }
+    return;
+  }
+
+  // API key endpoint
+  if (req.method === 'GET' && req.url === '/api/key') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ key: OPENAI_KEY }));
     return;
   }
 

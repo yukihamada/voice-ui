@@ -1,0 +1,30 @@
+{
+  "restrictions": {
+    "enabled": true,
+    "allowSelfModify": true,
+    "allowedFiles": [
+      "index.html",
+      "styles.css"
+    ],
+    "blockedFiles": [
+      "server.cjs",
+      "config.json",
+      "start.sh"
+    ],
+    "allowedActions": [
+      "read",
+      "edit",
+      "web_search"
+    ],
+    "blockedActions": [
+      "exec",
+      "write",
+      "gateway"
+    ],
+    "requireConfirmation": false,
+    "maxChangesPerSession": 10
+  },
+  "ui": {
+    "showRestrictions": true
+  }
+}

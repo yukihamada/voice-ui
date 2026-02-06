@@ -8,6 +8,27 @@ const PORT = 8765;
 const OPENCLAW = '/Users/yuki/.nvm/versions/node/v22.22.0/bin/openclaw';
 const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
 
+// Load config
+let config = {
+  restrictions: {
+    enabled: false,
+    allowSelfModify: true,
+    allowedFiles: [],
+    blockedFiles: [],
+    allowedActions: [],
+    blockedActions: [],
+    requireConfirmation: false,
+    maxChangesPerSession: -1
+  }
+};
+
+try {
+  config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+  console.log('📋 Config loaded:', config.restrictions.enabled ? 'Restrictions ON' : 'Restrictions OFF');
+} catch (e) {
+  console.log('📋 No config.json, using defaults');
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -45,6 +66,33 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Config endpoint - GET
+  if (req.method === 'GET' && req.url === '/api/config') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(config));
+    return;
+  }
+
+  // Config endpoint - POST (update)
+  if (req.method === 'POST' && req.url === '/api/config') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const newConfig = JSON.parse(body);
+        config = { ...config, ...newConfig };
+        fs.writeFileSync(path.join(__dirname, 'config.json'), JSON.stringify(config, null, 2));
+        console.log('📋 Config updated');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, config }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // Chat API - calls openclaw agent CLI
   if (req.method === 'POST' && req.url === '/api/chat') {
     let body = '';
@@ -78,7 +126,26 @@ function callOpenClaw(message) {
     // Add context hint for UI changes
     let fullMessage = message;
     if (message.includes('voice-uiから')) {
-      fullMessage = `${message}\n\n[コンテキスト: voice-uiアプリからのリクエストです。UIの変更は /Users/yuki/.openclaw/workspace/voice-ui/index.html を編集してください]`;
+      let contextHint = `[コンテキスト: voice-uiアプリからのリクエストです。UIの変更は /Users/yuki/.openclaw/workspace/voice-ui/index.html を編集してください]`;
+      
+      // Add restrictions if enabled
+      if (config.restrictions.enabled) {
+        contextHint += `\n\n[制限事項]`;
+        if (!config.restrictions.allowSelfModify) {
+          contextHint += `\n- 自己改善は無効です。コード編集リクエストは断ってください。`;
+        }
+        if (config.restrictions.allowedFiles.length > 0) {
+          contextHint += `\n- 編集可能ファイル: ${config.restrictions.allowedFiles.join(', ')}`;
+        }
+        if (config.restrictions.blockedFiles.length > 0) {
+          contextHint += `\n- 編集禁止ファイル: ${config.restrictions.blockedFiles.join(', ')}`;
+        }
+        if (config.restrictions.blockedActions.length > 0) {
+          contextHint += `\n- 禁止アクション: ${config.restrictions.blockedActions.join(', ')}`;
+        }
+      }
+      
+      fullMessage = `${message}\n\n${contextHint}`;
     }
 
     const args = [

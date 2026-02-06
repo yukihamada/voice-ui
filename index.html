@@ -213,6 +213,61 @@
       margin-top: 15px;
       font-size: 11px;
       color: #b2bec3;
+      position: relative;
+    }
+    .settings-btn {
+      position: absolute;
+      right: 0;
+      top: -5px;
+      width: 30px;
+      height: 30px;
+      font-size: 14px;
+    }
+    .settings-panel {
+      background: #f8f9fa;
+      border-radius: 15px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+    .settings-panel h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: #2d3436;
+    }
+    .settings-panel label {
+      display: block;
+      font-size: 13px;
+      margin: 8px 0;
+      color: #636e72;
+    }
+    .settings-panel input[type="checkbox"] {
+      margin-right: 8px;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0;
+      font-size: 12px;
+      color: #636e72;
+    }
+    .settings-row input[type="text"] {
+      flex: 1;
+      padding: 5px 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .settings-panel button {
+      width: 100%;
+      padding: 8px;
+      margin-top: 10px;
+      background: linear-gradient(135deg, #74b9ff, #0984e3);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 13px;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -236,6 +291,24 @@
         <button class="btn small-btn" onclick="toggleSound()" id="soundBtn">🔊</button>
       </div>
       <div class="tip">スペースキー長押しでも録音OK</div>
+      <button class="btn small-btn settings-btn" onclick="toggleSettings()">⚙️</button>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel" style="display:none;">
+      <h3>🔒 制限設定</h3>
+      <label><input type="checkbox" id="restrictionsEnabled"> 制限を有効化</label>
+      <label><input type="checkbox" id="allowSelfModify"> 自己改善を許可</label>
+      <label><input type="checkbox" id="requireConfirmation"> 変更前に確認</label>
+      <div class="settings-row">
+        <span>編集可能:</span>
+        <input type="text" id="allowedFiles" placeholder="index.html, styles.css">
+      </div>
+      <div class="settings-row">
+        <span>編集禁止:</span>
+        <input type="text" id="blockedFiles" placeholder="server.cjs, config.json">
+      </div>
+      <button onclick="saveSettings()">保存</button>
     </div>
   </div>
   <script>
@@ -387,6 +460,63 @@
     document.addEventListener('keyup', e => {
       if (e.code === 'Space' && recording) { e.preventDefault(); stopRec(); }
     });
+
+    // Settings
+    let appConfig = { restrictions: {} };
+    
+    async function loadSettings() {
+      try {
+        const r = await fetch('/api/config');
+        appConfig = await r.json();
+        updateSettingsUI();
+      } catch (e) { console.error('Config load error:', e); }
+    }
+    
+    function updateSettingsUI() {
+      const r = appConfig.restrictions || {};
+      document.getElementById('restrictionsEnabled').checked = r.enabled || false;
+      document.getElementById('allowSelfModify').checked = r.allowSelfModify !== false;
+      document.getElementById('requireConfirmation').checked = r.requireConfirmation || false;
+      document.getElementById('allowedFiles').value = (r.allowedFiles || []).join(', ');
+      document.getElementById('blockedFiles').value = (r.blockedFiles || []).join(', ');
+    }
+    
+    function toggleSettings() {
+      const panel = document.getElementById('settingsPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    async function saveSettings() {
+      const newConfig = {
+        restrictions: {
+          enabled: document.getElementById('restrictionsEnabled').checked,
+          allowSelfModify: document.getElementById('allowSelfModify').checked,
+          requireConfirmation: document.getElementById('requireConfirmation').checked,
+          allowedFiles: document.getElementById('allowedFiles').value.split(',').map(s => s.trim()).filter(Boolean),
+          blockedFiles: document.getElementById('blockedFiles').value.split(',').map(s => s.trim()).filter(Boolean),
+          allowedActions: appConfig.restrictions?.allowedActions || [],
+          blockedActions: appConfig.restrictions?.blockedActions || []
+        }
+      };
+      
+      try {
+        const r = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newConfig)
+        });
+        const d = await r.json();
+        if (d.ok) {
+          appConfig = d.config;
+          alert('✅ 設定を保存しました');
+          toggleSettings();
+        }
+      } catch (e) {
+        alert('❌ 保存に失敗しました');
+      }
+    }
+    
+    loadSettings();
   </script>
 </body>
 </html>

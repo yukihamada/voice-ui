@@ -93,6 +93,40 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Emergency Stop endpoint
+  if (req.method === 'POST' && req.url === '/api/emergency-stop') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { revert } = JSON.parse(body);
+        console.log('🛑 EMERGENCY STOP triggered');
+        
+        let reverted = false;
+        
+        if (revert) {
+          // Git revert last commit
+          const { execSync } = require('child_process');
+          try {
+            execSync('git revert --no-commit HEAD', { cwd: __dirname });
+            execSync('git checkout -- .', { cwd: __dirname });
+            console.log('🔄 Reverted to previous state');
+            reverted = true;
+          } catch (e) {
+            console.error('Revert failed:', e.message);
+          }
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, stopped: true, reverted }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // Chat API - calls openclaw agent CLI
   if (req.method === 'POST' && req.url === '/api/chat') {
     let body = '';

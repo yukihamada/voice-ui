@@ -269,6 +269,36 @@
       font-size: 13px;
       cursor: pointer;
     }
+    .emergency-btn {
+      display: none;
+      width: 100%;
+      padding: 12px;
+      margin-top: 15px;
+      background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+      color: #fff;
+      border: none;
+      border-radius: 15px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      animation: emergency-pulse 1s ease-in-out infinite;
+    }
+    .emergency-btn.active {
+      display: block;
+    }
+    @keyframes emergency-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+      50% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+    }
+    .stopped {
+      background: #ffe6e6 !important;
+    }
+    .stopped .robot-head {
+      background: linear-gradient(145deg, #ff6b6b, #ee5a5a) !important;
+    }
+    .stopped .name {
+      color: #ee5a5a !important;
+    }
   </style>
 </head>
 <body>
@@ -290,6 +320,9 @@
         <button class="btn mic-btn" id="micBtn" onclick="toggleRec()">🎤</button>
         <button class="btn small-btn" onclick="toggleSound()" id="soundBtn">🔊</button>
       </div>
+      
+      <!-- Emergency Stop Button -->
+      <button class="emergency-btn" id="emergencyBtn" onclick="emergencyStop()">🛑 緊急停止</button>
       <div class="tip">スペースキー長押しでも録音OK</div>
       <button class="btn small-btn settings-btn" onclick="toggleSettings()">⚙️</button>
     </div>
@@ -316,6 +349,8 @@
     fetch('/api/key').then(r => r.json()).then(d => KEY = d.key).catch(() => {});
 
     let rec, chunks = [], recording = false, sound = true, history = [];
+    let isProcessing = false;
+    let isStopped = false;
     const robot = document.getElementById('robot');
     const status = document.getElementById('status');
     const chat = document.getElementById('chat');
@@ -374,6 +409,9 @@
     }
 
     async function process() {
+      if (isStopped) return;
+      isProcessing = true;
+      showEmergencyButton();
       setState('なんて言ったかな...', 'thinking');
       const blob = new Blob(chunks, { type: 'audio/webm' });
       const form = new FormData();
@@ -433,9 +471,13 @@
           await speak(reply);
         }
         setState('タップして話しかけてね', 'idle');
+        isProcessing = false;
+        hideEmergencyButton();
       } catch (e) {
         console.error(e);
         setState('エラーが起きちゃった...', 'idle');
+        isProcessing = false;
+        hideEmergencyButton();
       }
     }
 
@@ -517,6 +559,51 @@
     }
     
     loadSettings();
+
+    // Emergency Stop
+    async function emergencyStop() {
+      if (confirm('🛑 緊急停止しますか？\n\n• 現在の処理を中断\n• 直前の変更をリバート（オプション）')) {
+        isStopped = true;
+        isProcessing = false;
+        
+        // Stop recording if active
+        if (recording) stopRec();
+        
+        // Call server to stop and optionally revert
+        try {
+          const revert = confirm('直前の変更をリバートしますか？');
+          const r = await fetch('/api/emergency-stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ revert })
+          });
+          const d = await r.json();
+          
+          if (d.ok) {
+            document.querySelector('.card').classList.add('stopped');
+            setState('🛑 緊急停止しました', 'idle');
+            addMsg('bot', '🛑 緊急停止しました。' + (d.reverted ? ' 変更をリバートしました。' : ''));
+            
+            if (d.reverted) {
+              setTimeout(() => location.reload(), 2000);
+            }
+          }
+        } catch (e) {
+          console.error('Emergency stop error:', e);
+        }
+        
+        // Hide emergency button
+        document.getElementById('emergencyBtn').classList.remove('active');
+      }
+    }
+    
+    function showEmergencyButton() {
+      document.getElementById('emergencyBtn').classList.add('active');
+    }
+    
+    function hideEmergencyButton() {
+      document.getElementById('emergencyBtn').classList.remove('active');
+    }
   </script>
 </body>
 </html>

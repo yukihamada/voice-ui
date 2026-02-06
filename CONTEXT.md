@@ -17,14 +17,23 @@
 
 → `/Users/yuki/.openclaw/workspace/voice-ui/index.html` を編集してください！
 
+## ⚠️ 変更後は必ずGitコミット！
+
+UIやコードを編集したら、必ず以下を実行：
+```bash
+cd /Users/yuki/.openclaw/workspace/voice-ui && git add -A && git commit -m "変更内容の説明"
+```
+
 ## ファイル構成
 
 - `index.html` - メインのUI（HTML/CSS/JS）
 - `server.cjs` - バックエンドサーバー
 - `package.json` - Node.js設定
+- `CONTEXT.md` - このファイル（コンテキスト情報）
 
 ## 現在のUI
 
-- パステルグラデーション背景
+- パステルグラデーション背景（または白）
 - ロボットキャラクター（表情が変わる）
 - 音声認識 + TTS
+- OpenClaw統合（自己改善可能）
